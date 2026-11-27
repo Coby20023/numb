@@ -219,7 +219,14 @@
     var hasContent = document.querySelector("[data-site-content]");
 
     if (!/admin(\.html)?$/i.test(location.pathname)) {
-      try { if (configureClient()) loadBackground().catch(function () {}); } catch (e) {}
+      try {
+        if (configureClient()) {
+          loadBackground().catch(function () {});
+          var tracker = document.createElement("script");
+          tracker.src = "assets/js/track.js";
+          document.head.appendChild(tracker);
+        }
+      } catch (e) {}
     }
 
     if (!sections.length && !hasContent) return;
