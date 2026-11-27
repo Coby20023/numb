@@ -148,6 +148,7 @@
     { id: "activities", label: "Activities", render: function (c) { return renderContent(c, "activities"); } },
     { id: "gallery", label: "Gallery", render: function (c) { return renderContent(c, "gallery_items"); } },
     { id: "website-content", label: "Website content", render: function (c) { return renderContent(c, "website_content"); } },
+    { id: "backgrounds", label: "Page backgrounds", render: renderBackgrounds },
     { id: "blog", label: "Blog", render: function (c) { return renderContent(c, "blog_posts"); } },
     { id: "faq", label: "FAQ approval", render: function (c) { return renderContent(c, "faq_entries"); } },
     { id: "unanswered", label: "Unanswered", render: renderUnanswered },
@@ -575,6 +576,140 @@
       });
       content.appendChild(form);
     });
+  }
+
+  /* ---- Page backgrounds: stored in site_settings as bg_<page> (JSON text) ---- */
+  var BG_PAGES = [
+    ["all", "All pages (default)"], ["index", "Home"], ["about", "About"], ["activities", "Activities"],
+    ["destinations", "Destinations"], ["packages", "Packages"], ["accommodation", "Accommodation"],
+    ["gallery", "Gallery"], ["blog", "Blog"], ["article", "Blog article"], ["contact", "Contact"],
+    ["hiking", "Hiking"], ["game-drive", "Game drive"], ["lake-malawi", "Lake Malawi"],
+    ["instagram", "Instagram"], ["privacy", "Privacy"], ["terms", "Terms"], ["404", "404 page"]
+  ];
+  var BG_IMAGE_RE = /^assets\/images\/[A-Za-z0-9][A-Za-z0-9._-]{0,180}\.(?:avif|gif|jpe?g|png|svg|webp)$/i;
+
+  function parseBg(value) {
+    if (value && typeof value === "object") return value;
+    try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+  }
+
+  function saveBg(key, data) {
+    return client.from("site_settings").upsert({
+      key: "bg_" + key, value: JSON.stringify(data), updated_at: new Date().toISOString()
+    }, { onConflict: "key" }).then(function (r) { if (r.error) throw r.error; });
+  }
+
+  function renderBackgrounds(content) {
+    var keys = BG_PAGES.map(function (page) { return "bg_" + page[0]; });
+    return client.from("site_settings").select("key,value").in("key", keys).then(function (result) {
+      if (result.error) throw result.error;
+      var saved = {};
+      (result.data || []).forEach(function (row) { saved[row.key] = parseBg(row.value); });
+      content.textContent = "";
+      content.appendChild(el("h2", null, "Page backgrounds"));
+      content.appendChild(el("p", "form-note", "Set a colour and/or image for each page. A page's own setting overrides \"All pages\". Images: JPEG, PNG, WebP or AVIF, max 5 MB."));
+      BG_PAGES.forEach(function (page) {
+        content.appendChild(backgroundRow(page[0], page[1], saved["bg_" + page[0]] || {}));
+      });
+    });
+  }
+
+  function backgroundRow(key, label, current) {
+    var box = el("div");
+    box.style.cssText = "border:1.5px solid var(--line);border-radius:12px;padding:16px;margin-top:14px";
+    box.appendChild(el("strong", null, label));
+    if (key !== "all") {
+      var open = el("a", "card-link", "  Open page \u2197");
+      open.href = key + ".html"; open.target = "_blank"; open.rel = "noopener";
+      box.appendChild(open);
+    }
+    var form = el("div", "admin-form");
+    var grid = el("div", "field-grid");
+
+    var colorLabel = el("label");
+    colorLabel.appendChild(document.createTextNode("Background colour"));
+    var color = el("input"); color.type = "color";
+    color.value = /^#[0-9a-f]{6}$/i.test(current.color || "") ? current.color : "#ffffff";
+    colorLabel.appendChild(color);
+    grid.appendChild(colorLabel);
+
+    var useLabel = el("label");
+    useLabel.style.cssText = "display:flex;align-items:center;gap:8px;align-self:end";
+    var useColor = el("input"); useColor.type = "checkbox"; useColor.style.width = "auto";
+    useColor.checked = Boolean(current.color);
+    useLabel.appendChild(useColor);
+    useLabel.appendChild(document.createTextNode("Use this colour"));
+    grid.appendChild(useLabel);
+
+    var pathLabel = el("label");
+    pathLabel.appendChild(document.createTextNode("Image path (assets/images/...)"));
+    var imagePath = el("input"); imagePath.type = "text"; imagePath.maxLength = 200;
+    imagePath.value = current.image_path || "";
+    pathLabel.appendChild(imagePath);
+    grid.appendChild(pathLabel);
+
+    var fileLabel = el("label");
+    fileLabel.appendChild(document.createTextNode("Or upload an image"));
+    var fileInput = el("input"); fileInput.type = "file";
+    fileInput.accept = "image/jpeg,image/png,image/webp,image/avif";
+    fileLabel.appendChild(fileInput);
+    grid.appendChild(fileLabel);
+
+    var removeImg = el("input"); removeImg.type = "checkbox"; removeImg.style.width = "auto";
+    if (current.image_path || current.storage_path) {
+      var removeLabel = el("label", "full");
+      removeLabel.style.cssText = "display:flex;align-items:center;gap:8px";
+      removeLabel.appendChild(removeImg);
+      removeLabel.appendChild(document.createTextNode("Remove the current image"));
+      grid.appendChild(removeLabel);
+    }
+    form.appendChild(grid);
+
+    var msg = el("div", "admin-msg");
+    var save = el("button", "btn btn-gold", "Save"); save.type = "button"; save.style.marginTop = "14px";
+    var reset = el("button", "mini", "Reset"); reset.type = "button"; reset.style.marginLeft = "10px";
+    if (!canWrite()) { save.hidden = true; reset.hidden = true; }
+    form.appendChild(save); form.appendChild(reset); form.appendChild(msg);
+
+    function fail(text) { msg.className = "admin-msg err"; msg.textContent = text; }
+
+    save.addEventListener("click", function () {
+      var data = {};
+      if (useColor.checked) data.color = color.value;
+      var path = imagePath.value.trim();
+      var file = fileInput.files && fileInput.files[0];
+      var upload = Promise.resolve();
+      if (file) {
+        if (!/^image\/(jpeg|png|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+          return fail("Choose a JPEG, PNG, WebP or AVIF image smaller than 5 MB.");
+        }
+        var safe = file.name.toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(-80);
+        var storagePath = "backgrounds/" + key + "-" + Date.now() + "-" + safe;
+        upload = client.storage.from(storageBucket).upload(storagePath, file, {
+          cacheControl: "3600", contentType: file.type
+        }).then(function (r) { if (r.error) throw r.error; data.storage_path = r.data.path; });
+      } else if (path && !removeImg.checked) {
+        if (!BG_IMAGE_RE.test(path) || path.indexOf("..") !== -1) {
+          return fail("Image path must look like assets/images/photo.jpg");
+        }
+        data.image_path = path;
+      } else if (current.storage_path && !removeImg.checked) {
+        data.storage_path = current.storage_path;
+      }
+      save.disabled = true;
+      upload.then(function () { return saveBg(key, data); })
+        .then(function () { showTab("backgrounds"); })
+        .catch(function (error) { fail(errorText(error)); save.disabled = false; });
+    });
+
+    reset.addEventListener("click", function () {
+      if (!window.confirm("Remove the background for " + label + "?")) return;
+      saveBg(key, {}).then(function () { showTab("backgrounds"); })
+        .catch(function (error) { fail(errorText(error)); });
+    });
+
+    box.appendChild(form);
+    return box;
   }
 
   function patch(table, id, body, button) {
