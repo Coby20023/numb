@@ -170,9 +170,58 @@
     });
   }
 
+  /* ---- Page backgrounds (set from the admin dashboard, stored in site_settings as bg_<page>) ---- */
+  function pageKey() {
+    var name = (location.pathname.split("/").pop() || "index").replace(/\.html?$/i, "");
+    return name || "index";
+  }
+
+  function parseBg(value) {
+    if (value && typeof value === "object") return value;
+    try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+  }
+
+  function hasBg(bg) {
+    return Boolean(bg && (bg.color || bg.image_path || bg.storage_path));
+  }
+
+  function applyBackground(bg) {
+    if (!hasBg(bg)) return;
+    var style = document.body.style;
+    if (/^#[0-9a-f]{3,8}$/i.test(bg.color || "")) style.backgroundColor = bg.color;
+    var image = "";
+    if (safeImagePath(bg.image_path)) image = bg.image_path;
+    else if (typeof bg.storage_path === "string" && /^backgrounds\/[A-Za-z0-9._-]+$/.test(bg.storage_path)) {
+      image = client.storage.from(storageBucket).getPublicUrl(bg.storage_path).data.publicUrl;
+    }
+    if (image) {
+      style.backgroundImage = 'url("' + image + '")';
+      style.backgroundSize = "cover";
+      style.backgroundPosition = "center";
+      style.backgroundRepeat = "no-repeat";
+      style.backgroundAttachment = "fixed";
+    }
+  }
+
+  function loadBackground() {
+    var key = pageKey();
+    return client.from("site_settings").select("key,value").in("key", ["bg_all", "bg_" + key])
+      .then(function (result) {
+        if (result.error) throw result.error;
+        var map = {};
+        (result.data || []).forEach(function (row) { map[row.key] = parseBg(row.value); });
+        applyBackground(hasBg(map["bg_" + key]) ? map["bg_" + key] : map.bg_all);
+      });
+  }
+
   function start() {
     var sections = Array.prototype.slice.call(document.querySelectorAll("[data-home-list]"));
     var hasContent = document.querySelector("[data-site-content]");
+
+    if (!/admin(\.html)?$/i.test(location.pathname)) {
+      try { if (configureClient()) loadBackground().catch(function () {}); } catch (e) {}
+    }
+
     if (!sections.length && !hasContent) return;
 
     try { configureClient(); } catch (error) {
