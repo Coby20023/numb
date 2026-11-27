@@ -1,0 +1,12 @@
+{
+  "name": "moyenda-tour-guide-api",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Portable Node API service for the Moyenda Tour Guide static website",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node api-server/server.js"
+  }
+}

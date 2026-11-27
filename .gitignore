@@ -1,0 +1,14 @@
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Netlify and local tooling
+.netlify/
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
