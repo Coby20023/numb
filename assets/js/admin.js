@@ -157,12 +157,20 @@
     { id: "settings", label: "Business settings", render: renderSettings }
   ];
 
+  window.moyendaAdmin = {
+    client: client, el: el, TABS: TABS, state: state, errorText: errorText, showTab: showTab,
+    canWrite: canWrite, headRow: headRow, cell: cell, wrap: wrap, count: count, current: "overview"
+  };
+
   function showTab(id) {
     var tab = TABS.filter(function (item) { return item.id === id; })[0] || TABS[0];
+    window.moyendaAdmin.current = tab.id;
     var nav = $("tabs");
     nav.textContent = "";
     TABS.forEach(function (item) {
       var button = el("button", item.id === tab.id ? "active" : "", item.label);
+      if (item.icon) button.insertAdjacentHTML("afterbegin", item.icon);
+      if (item.badge) button.appendChild(el("span", "badge", String(item.badge)));
       button.type = "button";
       button.setAttribute("aria-current", item.id === tab.id ? "page" : "false");
       button.addEventListener("click", function () { showTab(item.id); });
@@ -796,4 +804,8 @@
       showLogin("Could not verify your session: " + errorText(error));
     });
   }
+
+  var extra = document.createElement("script");
+  extra.src = "assets/js/admin-extra.js";
+  document.head.appendChild(extra);
 })();
