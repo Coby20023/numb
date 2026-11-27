@@ -21,8 +21,8 @@ optional server-side features such as the AI guide and scheduled Instagram sync.
    `assets/js/app.js`:
 
    ```js
-   window.MOYENDA_SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
-   window.MOYENDA_SUPABASE_KEY = "YOUR-PUBLIC-PUBLISHABLE-OR-ANON-KEY";
+   window.MOYENDA_SUPABASE_URL = "https://jvofkvfprczdtbppyiqc.supabase.co";
+   window.MOYENDA_SUPABASE_KEY = "sb_publishable_G4RSHbM-H_5OqjlE2mxLwg_Ym3nWUo2";
    ```
 
    Never use a `service_role` or secret key in this file or anywhere in the published
